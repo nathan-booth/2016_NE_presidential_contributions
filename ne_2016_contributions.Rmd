@@ -1,0 +1,172 @@
+---
+title: "2016 Nebraska Presidential Contributions"
+output: html_notebook
+{r echo=FALSE, message=FALSE, warning=FALSE}
+---
+
+# Some Tentative Questions (Not Phrased As Questions)
+Let's look at 2016 presidential contributions from my home state of Nebraska. The population of people we're looking at is Nebraskan's who contributed to a presidential candidate during the primaries or the general election. I'm curious about:
+* the number of Democrat and Republican contributors
+* the location of the contributors
+* the probable gender of the contributors
+* the occupations of the contributors
+* the amount contributed by candidate, location, date, and gender
+* the candidates receiving contributions
+
+# The Data
+The data is available [here](http://fec.gov/disclosurep/PDownload.do) and an explanation for each variable is [here](ftp://ftp.fec.gov/FEC/Presidential_Map/2016/DATA_DICTIONARIES/CONTRIBUTOR_FORMAT.txt).
+
+I got an error about duplicate row names and resolved it with some guidance from the [forums](https://discussions.udacity.com/t/p4-load-csv-issue/29971/3). Apparently, someone added a superfluous comma - probably an overzealous [Oxford](https://www.grammarly.com/blog/what-is-the-oxford-comma-and-why-do-people-care-so-much-about-it/) enthusiast. So I added a dummy column, then removed it. It's a bit of a mystery why the contributor state column is included when the dataset by definition only includes Nebraska contributors. In fact, let's just remove it because a variable that has the same value for the entire dataset offends me.
+
+```{r}
+contbr = read.csv('C:\\Users\\Nathan\\Desktop\\p4_EDA\\ne_data.csv')
+contbr = subset(contbr, select = -c(X, contbr_st))
+str(contbr)
+```
+
+The data types of the variables look fine; all factors except for the numerical contribution amount. 
+
+Let's view a numeric summary.
+
+```{r}
+summary(contbr)
+```
+
+# Contributions
+
+## How much did people contribute?
+
+```{r}
+summary(contbr$contb_receipt_amt)
+```
+
+That maximum makes sense because the presidential campaign had two separate elections, the primary and the general election, and the maximum contribution amount for an individual is [$2,700](http://www.fec.gov/pages/brochures/citizens.shtml#how_much). It's a bit of a mystery why some individuals appear to be getting credited from campaign committees and I didn't find an explanation with a cursory keyword search. 
+
+Looking at these quartiles though, we have some outliers. Let's get counts, then eliminate them for visualization.
+
+```{r}
+contbr$contb_amt_quartiles <- cut(contbr$contb_receipt_amt,
+                                  breaks = c(-4600, 19, 28, 80, 5400))
+table(contbr$contb_amt_quartiles)
+```
+
+Now that I finished this, I realize I didn't accomplish what I was trying to accomplish. I merely counted the amount of observations in each quartile. What I want to do is eliminate the [top and bottom 1%](http://r.789695.n4.nabble.com/removing-lower-and-upper-quantiles-from-an-arry-td3310479.html) of values.
+
+```{r}
+library(ggplot2)
+ggplot(aes(x = contb_receipt_amt), 
+       data = contbr[contbr$contb_receipt_amt >= quantile(contbr$contb_receipt_amt, .01) &
+         contbr$contb_receipt_amt <= quantile(contbr$contb_receipt_amt, .99), ]) +
+  geom_histogram(binwidth = 20)
+```
+
+I've heard from past reading and news consumption that since Barack Obama's 2008 campaign, campaigns have seen a large uptick in the number of small individual contributions. In this case, most are below $250. Let's take a closer look at the contributions less than $250.
+
+```{r}
+ggplot(aes(x = contb_receipt_amt), 
+       data = contbr) +
+  geom_histogram(binwidth = 5) +
+  xlim(-1, 250)
+```
+
+So, small amounts and easy denominations are popular, such as $25, $50, and $100. What about if we look at less than $100 contributions?
+
+```{r}
+ggplot(aes(x = contb_receipt_amt), 
+       data = contbr) +
+  geom_histogram(binwidth = 1) +
+  xlim(-1, 100)
+```
+
+And this looks like further confirmation for the tendency to use easy denominations with multiples of 5, like $5, $10, $15, etc.
+
+## Where did contributions originate?
+
+```{r}
+summary(contbr$contbr_city, maxsum = 10)
+(9227+6510)/nrow(contbr)
+```
+
+Omaha and Lincoln have the highest population densities and are the most ethnically diverse. They account for about 57% of the contributions. I saw earlier that Clinton and Sanders received a lot of contributions so if maybe the majority of contributions were to the two Democrats.
+
+## Who received contributions?
+
+```{r}
+summary(contbr$cand_nm, maxsum = 6)
+(10477+6542)/nrow(contbr)
+```
+
+60% of contributions went to Clinton or Sanders. This is a surprise.
+
+I'd speculate that Republicans were either unenthusiastic with their choices or were expecting a Republican would carry the state so not as many bothered to financially invest in a Republican candidate.
+
+About 60% of contributions went to the campaigning Democrats (except poor [O'Malley and Lessig](https://en.wikipedia.org/wiki/United_States_presidential_election,_2016#Nominees_2) and a little under 60% of contributions originated from the metro areas. Using location as a dubious proxy for party, it appears that Nebraska Democrats were more willing to financially invest in their candidate of choice than Nebraska Republicans.
+
+## How does gender affect contributions?
+
+Abort! I don't see a quick or approximate way of classifying people by gender with this data. I considered using an outside list of designated male and female names to classify the names in this dataset. However, that seems like more work than is warranted for a mildly interesting question that is likely not important.
+
+## What are the jobs of most contributors?
+```{r}
+summary(contbr$contbr_occupation, maxsum = 10)
+```
+
+This "Information Requested" category seems like an NA proxy where the contributor didn't respond.
+
+## Dates of Contributions
+
+This is actually the date on the receipt of the contribution, not the day the contribution was made. Let's change these date factors to datetime objects for plotting. A couple questions might be interesting here. 
+* Do we see spikes in contributions around certain dates?
+* Who is getting contributed to by date?
+
+```{r}
+contbr$contb_date <- as.Date(contbr$contb_receipt_dt, format = "%d-%b-%y")
+
+ggplot(aes(x = contb_date), data = contbr) +
+  geom_histogram(binwidth = 10) +
+  scale_x_date(date_breaks = '1 month', date_labels = "%b", 
+               limits = c(as.Date('2015-02-01'), as.Date('2016-12-01')))
+```
+
+Needed to lookup how to limit the [display of dates](https://stackoverflow.com/questions/14759676/specification-of-first-and-last-tick-marks-with-ggplot2-with-scale-x-date).
+
+This is interesting. There's a heavy sustained period of contributions made from about January to May of 2016. Later, we observe a spike in contributions in July and August. Then a final round of contributions in the last days of the general election in October and November. 
+
+I would think that fundraising is much more important at the start of the primary season and the start of the general election. We observe the latter occurring in response to the [Republican](https://en.wikipedia.org/wiki/2016_Republican_National_Convention) and [Democratic](https://en.wikipedia.org/wiki/2016_Democratic_National_Convention) conventions, but not the former. Probably because it's difficult to get people engaged 18-20 months ahead of the election.
+
+Let's take a closer look at contributions around convention time to see if my intuition is correct.
+
+```{r}
+ggplot(aes(x = contb_date), data = contbr) +
+  geom_histogram(binwidth = 1) +
+  scale_x_date(date_breaks = '1 day', date_labels = "%d", 
+               limits = c(as.Date('2016-07-01'), as.Date('2016-07-31')))
+```
+
+The dates aren't quite matching up. The conventions started on the 18th and 25th. This makes me think that contributors responded to the _announcements_ of the expected winners by news media rather than the official party selections of their candidates. This would be tougher to support with data since there's no official announcement. I doubt even the politically engaged were following closely enough to know when their preferred candidate was mathematically eliminated from receiving enough primary votes. The hypothesis makes intuitive sense though. We do observe increases in contributions around each of the conventions.
+
+## Who is getting contributed to by date?
+
+```{r}
+ggplot(aes(x = contb_date, fill = cand_nm), data = contbr) +
+  geom_histogram(binwidth = 10) +
+  scale_x_date(date_breaks = '1 month', date_labels = "%b", 
+               limits = c(as.Date('2015-02-01'), as.Date('2016-12-01')))
+```
+
+This is a bit ugly because it includes both the primary and general elections. So it's over a long period of time and there were a lot of candidates at various points.
+
+Let's look at the primary first with the arbitrary cut off date of the last day of the Republican convention. I chose that because everyone knew Clinton was the Democratic candidate but there was reported uncertainty that the party would unite around Trump at the convention.
+
+```{r}
+ggplot(aes(x = contb_date, fill = cand_nm), data = contbr) +
+  geom_histogram(binwidth = 15) +
+  scale_x_date(date_breaks = '1 month', date_labels = "%b", 
+               limits = c(as.Date('2015-02-01'), as.Date('2016-07-20')))
+```
+
+*ow can I limit this graph to show only candidates who received more than 100 contributions?*
+```{r}
+summary(contbr$cand_nm)
+```
+
