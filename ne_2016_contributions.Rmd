@@ -165,7 +165,7 @@ ggplot(aes(x = contb_date, fill = cand_nm), data = contbr) +
                limits = c(as.Date('2015-02-01'), as.Date('2016-07-20')))
 ```
 
-*ow can I limit this graph to show only candidates who received more than 100 contributions?*
+*How can I limit this graph to show only candidates who received more than 100 contributions?*
 ```{r}
 summary(contbr$cand_nm)
 ```
